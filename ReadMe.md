@@ -1,4 +1,4 @@
-# Acad AI Mini Assessment Engine (Backend)
+# Mini Assessment Engine (Backend)
 
 ## What this project is
 
