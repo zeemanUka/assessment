@@ -69,17 +69,30 @@ REST_FRAMEWORK = {
         "django_filters.rest_framework.DjangoFilterBackend",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_RENDERER_CLASSES": [
+        "common.renderers.EnvelopeJSONRenderer",
+        # optionally keep browsable API:
+        # "rest_framework.renderers.BrowsableAPIRenderer",
+    ],
 }
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Acad AI Mini Assessment Engine",
     "DESCRIPTION": "Backend API for exams, submissions, and mock grading.",
     "VERSION": "1.0.0",
-    # this makes Token auth show up clearly in Swagger UI
-    "SERVE_AUTHENTICATION": [
-        "rest_framework.authentication.TokenAuthentication",
-    ],
+    "COMPONENTS": {
+        "securitySchemes": {
+            "tokenAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "Authorization",
+                "description": "Token auth. Use: Token <token>",
+            }
+        }
+    },
+    "SECURITY": [{"tokenAuth": []}],
 }
+
 
 
 ROOT_URLCONF = "config.urls"

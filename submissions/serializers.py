@@ -36,6 +36,13 @@ class SubmissionCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({"answers": f"Questions not in this exam: {missing}"})
 
         attrs["exam"] = exam
+        request = self.context.get("request")
+        if request and request.user and request.user.is_authenticated:
+            if Submission.objects.filter(student=request.user, exam=attrs["exam"]).exists():
+                raise serializers.ValidationError({
+                    "exam_id": "You have already submitted for this exam."
+                })
+
         return attrs
 
     def create(self, validated_data):

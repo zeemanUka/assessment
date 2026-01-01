@@ -8,15 +8,45 @@ from .serializers import SubmissionCreateSerializer, SubmissionDetailSerializer
 from .permissions import IsOwnerOrStaff
 
 from grading.services import MockGradingService
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiExample
 
-class SubmissionCreateView(generics.CreateAPIView):
+
+@extend_schema_view(
+    post=extend_schema(
+        tags=["Submissions"],
+        request=SubmissionCreateSerializer,
+        responses={201: SubmissionDetailSerializer},
+        examples=[
+            OpenApiExample(
+                "Create submission example",
+                value={
+                    "exam_id": 1,
+                    "answers": [
+                        {"question_id": 10, "selected_option": "B"},
+                        {"question_id": 11, "answer_text": "My short answer"}
+                    ],
+                },
+                request_only=True,
+            ),
+        ],
+    ),
+)
+
+class SubmissionCreateView(generics.GenericAPIView):
     serializer_class = SubmissionCreateSerializer
 
     @transaction.atomic
-    def perform_create(self, serializer):
-        submission = serializer.save()
+    def post(self, request, *args, **kwargs):
+        input_serializer = self.get_serializer(data=request.data, context={"request": request})
+        input_serializer.is_valid(raise_exception=True)
 
-        # Prefetch answers + questions for grading efficiency
+        try:
+            submission = input_serializer.save()
+        except IntegrityError:
+            # handles UNIQUE constraint failed: (student, exam)
+            raise ValidationError({"exam_id": "You have already submitted for this exam."})
+
+        # Re-fetch with optimal prefetch for grading
         submission = (
             Submission.objects
             .select_related("exam", "student")
@@ -27,7 +57,6 @@ class SubmissionCreateView(generics.CreateAPIView):
         grader = MockGradingService()
         result = grader.grade(submission)
 
-        # Persist grading to answers + submission
         per_q = {g.question_id: g for g in result.per_question}
 
         answers = list(submission.answers.all())
@@ -37,7 +66,6 @@ class SubmissionCreateView(generics.CreateAPIView):
                 ans.awarded_score = g.awarded_score
                 ans.feedback = g.feedback
 
-        from .models import SubmissionAnswer
         SubmissionAnswer.objects.bulk_update(answers, ["awarded_score", "feedback"])
 
         submission.score = result.total_score
@@ -46,9 +74,16 @@ class SubmissionCreateView(generics.CreateAPIView):
         submission.grade_letter = letter_grade(submission.score)
         submission.save(update_fields=["score", "graded_at", "status", "grade_letter"])
 
+        output = SubmissionDetailSerializer(submission).data
+        return Response(output, status=status.HTTP_201_CREATED)
+
 
 class SubmissionListView(generics.ListAPIView):
     serializer_class = SubmissionDetailSerializer
+
+    @extend_schema(tags=["Submissions"], responses=SubmissionDetailSerializer(many=True))
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = (
@@ -65,6 +100,10 @@ class SubmissionListView(generics.ListAPIView):
 class SubmissionDetailView(generics.RetrieveAPIView):
     serializer_class = SubmissionDetailSerializer
     permission_classes = [IsOwnerOrStaff]
+
+    @extend_schema(tags=["Submissions"], responses=SubmissionDetailSerializer)
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         return (

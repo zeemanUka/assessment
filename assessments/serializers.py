@@ -17,3 +17,13 @@ class ExamDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Exam
         fields = ["id", "title", "course", "duration_minutes", "metadata", "created_at", "questions"]
+
+class ExamCreateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Exam
+        fields = ["title", "course", "duration_minutes", "metadata"]
+
+class QuestionCreateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Question
+        fields = ["exam", "question_type", "prompt", "expected_answer", "options", "max_score"]
